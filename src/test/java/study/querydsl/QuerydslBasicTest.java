@@ -3,8 +3,8 @@ package study.querydsl;
 import com.querydsl.core.BooleanBuilder;
 import com.querydsl.core.QueryResults;
 import com.querydsl.core.Tuple;
-import com.querydsl.core.types.Predicate;
 import com.querydsl.core.types.Projections;
+import com.querydsl.core.types.dsl.BooleanExpression;
 import com.querydsl.core.types.dsl.CaseBuilder;
 import com.querydsl.core.types.dsl.Expressions;
 import com.querydsl.jpa.JPAExpressions;
@@ -633,11 +633,97 @@ public class QuerydslBasicTest {
                 .fetch();
     }
 
-    private Predicate usernameEq(String usernameCond) {
+    private BooleanExpression usernameEq(String usernameCond) {
         return usernameCond != null ? member.username.eq(usernameCond) : null;
     }
 
-    private Predicate ageEq(Integer ageCond) {
+    private BooleanExpression ageEq(Integer ageCond) {
         return ageCond != null ? member.age.eq(ageCond) : null;
     }
+    private BooleanExpression allEq(String usernameCond, Integer ageCond) {
+        return usernameEq(usernameCond).and(ageEq(ageCond));
+    }
+
+    @Test
+    public void bulkUpdate(){
+
+        //member1 = 10 -> 비회원
+        //member2 = 20 -> 비회원
+        //member3 -> 유지
+        //member4 -> 유지
+
+        //update 시에는 바로 db에 저장. 그러나 영속성컨텍스트에는 그대로 남아있다.
+        long count = queryFactory
+                .update(member)
+                .set(member.username, "비회원")
+                .where(member.age.lt(28))
+                .execute();
+
+        // 그래서 영속성 컨텍스트 flush/clear를 해줌으로 해당 문제를 해결한다.
+        em.flush();
+        em.clear();
+
+        List<Member> result = queryFactory
+                .selectFrom(member)
+                .fetch();
+
+        // 영속성컨텍스트 출력해서 확인
+        for (Member s:result) {
+            System.out.println("s : " + s);
+
+        }
+    }
+
+    @Test
+    public void bulkAdd() {
+        long count = queryFactory
+                .update(member)
+                .set(member.age, member.age.add(1))
+                .execute();
+    }
+
+    @Test
+    public void bulkDelete() {
+        long count = queryFactory
+                .delete(member)
+                .where(member.age.gt(18))
+                .execute();
+    }
+
+    /** sql function (단, 해당 db에서 제공하는 function만 사용 가능. 없을 시 상속받아서 커스터마이징 해야함.
+     *  ex) H2Dialect, MysqlDialect ....
+     * */
+    @Test
+    public void sqlFunction() {
+        List<String> result = queryFactory
+                .select(Expressions.stringTemplate("function('replace', {0}, {1}, {2})",
+                        member.username, "member", "M"))
+                .from(member)
+                .fetch();
+
+        for (String s : result) {
+            System.out.println("s = " + s);
+
+        }
+    }
+
+    @Test
+    public void sqlFunction2() {
+        List<String> fetch = queryFactory
+                .select(member.username)
+                .from(member)
+//                .where(member.username.eq(
+//                        Expressions.stringTemplate("function('lower', {0})",
+//                        member.username)))
+                .where(member.username.eq(member.username.lower()))
+                .fetch();
+
+        for (String s : fetch) {
+            System.out.println("s : " + s);
+
+        }
+    }
+
+
+
 }
